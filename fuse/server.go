@@ -378,6 +378,7 @@ func (ms *Server) readRequest() (req *requestAlloc, code Status) {
 	if err != nil {
 		code = ToStatus(err)
 		ms.reqPool.Put(reqIface)
+		ms.readPool.Put(destIface)
 		ms.reqMu.Lock()
 		ms.reqReaders--
 		ms.reqMu.Unlock()
@@ -392,6 +393,11 @@ func (ms *Server) readRequest() (req *requestAlloc, code Status) {
 	gobbled := req.setInput(dest[:n])
 	if len(req.inputBuf) < int(unsafe.Sizeof(InHeader{})) {
 		log.Printf("Short read for input header: %v", req.inputBuf)
+		ms.readPool.Put(destIface)
+		ms.reqPool.Put(reqIface)
+		ms.reqMu.Lock()
+		ms.reqReaders--
+		ms.reqMu.Unlock()
 		return nil, EINVAL
 	}
 	opCode := ((*InHeader)(unsafe.Pointer(&req.inputBuf[0]))).Opcode
